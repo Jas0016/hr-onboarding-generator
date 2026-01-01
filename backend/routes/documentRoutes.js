@@ -1,104 +1,75 @@
 const express = require("express");
-const router = express.Router();
+const PDFDocument = require("pdfkit");
 const Template = require("../models/Template");
-const Document = require("../models/Document");
-const OpenAI = require("openai");
+const GeneratedDocument = require("../models/GeneratedDocument");
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const router = express.Router();
 
-// Generate onboarding document
+/**
+ * Generate document + PDF
+ */
 router.post("/generate", async (req, res) => {
   try {
-    const { employeeName, role, selectedElements } = req.body;
+    const { employeeName, role, elements } = req.body;
 
-    if (!employeeName || !role || !selectedElements?.length) {
-      return res.status(400).json({ error: "Missing required fields" });
+    if (!employeeName || !role || !elements?.length) {
+      return res.status(400).json({ message: "Missing fields" });
     }
 
+    // Fetch selected templates
     const templates = await Template.find({
-      key: { $in: selectedElements },
+      key: { $in: elements },
     });
 
-    if (!templates.length) {
-      return res.status(400).json({ error: "No templates found" });
-    }
+    let content = `Welcome ${employeeName}!\n\n`;
+    content += `We are pleased to welcome you as a ${role}.\n\n`;
 
-    const combinedTemplateText = templates
-      .map((t) => `${t.title}: ${t.content}`)
-      .join("\n\n");
+    templates.forEach((t) => {
+      content += `${t.title}: ${t.content}\n\n`;
+    });
 
-    let finalContent;
+    content +=
+      "We look forward to your contributions and wish you success in your role.";
 
-    try {
-      // 🔐 AI call with safety
-      const completion = await Promise.race([
-        openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an HR assistant generating professional onboarding documents.",
-            },
-            {
-              role: "user",
-              content: `
-Employee Name: ${employeeName}
-Role: ${role}
-
-Generate a professional onboarding document using these sections:
-
-${combinedTemplateText}
-              `,
-            },
-          ],
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("AI timeout")), 10000)
-        ),
-      ]);
-
-      finalContent = completion.choices[0].message.content;
-    } catch (aiError) {
-      // ✅ SAFE FALLBACK (VISIBLE, NOT SILENT)
-      finalContent = `
-Welcome ${employeeName}!
-
-We are pleased to welcome you as a ${role}.
-
-${combinedTemplateText}
-
-We look forward to your contributions and wish you success in your role.
-      `;
-    }
-
-    const savedDoc = await Document.create({
+    // Save history
+    await GeneratedDocument.create({
       employeeName,
       role,
-      selectedElements,
-      content: finalContent,
+      content,
+      createdAt: new Date(),
     });
 
-    res.json({ content: finalContent });
+    // ---- PDF GENERATION ----
+    const doc = new PDFDocument();
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${employeeName}_Onboarding.pdf"`
+    );
+
+    doc.pipe(res);
+
+    doc.fontSize(14).text("HR Onboarding Document\n\n", {
+      align: "center",
+    });
+
+    doc.moveDown();
+    doc.fontSize(11).text(content);
+
+    doc.end();
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Document generation failed" });
+    res.status(500).json({ message: "PDF generation failed" });
   }
 });
 
-// Fetch history
-router.get("/history/:employeeName", async (req, res) => {
-  try {
-    const docs = await Document.find({
-      employeeName: req.params.employeeName,
-    }).sort({ createdAt: -1 });
-
-    res.json(docs);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch history" });
-  }
+/**
+ * Fetch history
+ */
+router.get("/history", async (req, res) => {
+  const docs = await GeneratedDocument.find().sort({ createdAt: -1 });
+  res.json(docs);
 });
 
 module.exports = router;
