@@ -8,25 +8,20 @@ function App() {
   const [role, setRole] = useState("");
   const [sections, setSections] = useState([]);
   const [doc, setDoc] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  const toggleSection = (section) => {
+  const toggle = (s) => {
     setSections((prev) =>
-      prev.includes(section)
-        ? prev.filter((s) => s !== section)
-        : [...prev, section]
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
     );
   };
 
   const generate = async () => {
-    setLoading(true);
     const res = await axios.post(`${API}/api/documents/generate`, {
       employeeName: name,
       role,
       sections,
     });
     setDoc(res.data);
-    setLoading(false);
   };
 
   return (
@@ -41,5 +36,31 @@ function App() {
 
       <h4>Select Onboarding Elements</h4>
       <label>
-        <input type="checkbox" onChange={() => toggleSection("Company Policies")} />
-        Company Polici
+        <input type="checkbox" onChange={() => toggle("Company Policies")} />
+        Company Policies
+      </label><br />
+      <label>
+        <input type="checkbox" onChange={() => toggle("Employee Benefits")} />
+        Employee Benefits
+      </label><br />
+      <label>
+        <input type="checkbox" onChange={() => toggle("Team Introduction")} />
+        Team Introduction
+      </label><br /><br />
+
+      <button onClick={generate}>Generate</button>
+
+      {doc && (
+        <>
+          <h3>Preview</h3>
+          <pre>{doc.content}</pre>
+          <a href={`${API}/api/documents/download/${doc._id}`} target="_blank" rel="noreferrer">
+            Download PDF
+          </a>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default App;
