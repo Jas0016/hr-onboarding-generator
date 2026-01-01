@@ -1,20 +1,16 @@
 const express = require("express");
-const PDFDocument = require("pdfkit");
+const router = express.Router();
 const Template = require("../models/Template");
 const GeneratedDocument = require("../models/GeneratedDocument");
+const PDFDocument = require("pdfkit");
 
-const router = express.Router();
-
+// Generate document
 router.post("/generate", async (req, res) => {
   try {
-    const { employeeName, role, selectedElements } = req.body;
-
-    if (!employeeName || !role || !selectedElements.length) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
+    const { employeeName, role, elements } = req.body;
 
     const templates = await Template.find({
-      key: { $in: selectedElements }
+      key: { $in: elements }
     });
 
     let content = `Welcome ${employeeName}!\n\n`;
@@ -24,34 +20,40 @@ router.post("/generate", async (req, res) => {
       content += `${t.title}: ${t.content}\n\n`;
     });
 
-    content += "We look forward to your contributions and wish you success.";
+    content +=
+      "We look forward to your contributions and wish you success in your role.";
 
-    // Save history
-    await GeneratedDocument.create({
+    const saved = await GeneratedDocument.create({
       employeeName,
       role,
-      content,
-      createdAt: new Date()
+      content
     });
 
-    // PDF creation
-    const doc = new PDFDocument();
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${employeeName}_Onboarding.pdf"`
-    );
-
-    doc.pipe(res);
-    doc.fontSize(12).text(content);
-    doc.end();
-
+    res.json(saved);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "PDF generation failed" });
+    res.status(500).json({ error: "Document generation failed" });
   }
 });
 
+// Download PDF
+router.get("/download/:id", async (req, res) => {
+  const docData = await GeneratedDocument.findById(req.params.id);
+  if (!docData) return res.sendStatus(404);
+
+  const pdf = new PDFDocument();
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename=onboarding-${docData.employeeName}.pdf`
+  );
+
+  pdf.pipe(res);
+  pdf.text(docData.content);
+  pdf.end();
+});
+
+// History
 router.get("/history", async (req, res) => {
   const docs = await GeneratedDocument.find().sort({ createdAt: -1 });
   res.json(docs);
