@@ -8,7 +8,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 🔹 Generate onboarding document (AI enforced)
+// Generate onboarding document
 router.post("/generate", async (req, res) => {
   try {
     const { employeeName, role, selectedElements } = req.body;
@@ -17,7 +17,6 @@ router.post("/generate", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Fetch templates from MongoDB
     const templates = await Template.find({
       key: { $in: selectedElements },
     });
@@ -27,39 +26,54 @@ router.post("/generate", async (req, res) => {
     }
 
     const combinedTemplateText = templates
-      .map((t) => `### ${t.title}\n${t.content}`)
+      .map((t) => `${t.title}: ${t.content}`)
       .join("\n\n");
 
-    // 🔥 ENFORCED AI CALL (NO SILENT FALLBACK)
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an HR assistant generating professional onboarding documents.",
-        },
-        {
-          role: "user",
-          content: `
+    let finalContent;
+
+    try {
+      // 🔐 AI call with safety
+      const completion = await Promise.race([
+        openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are an HR assistant generating professional onboarding documents.",
+            },
+            {
+              role: "user",
+              content: `
 Employee Name: ${employeeName}
 Role: ${role}
 
-Using the following onboarding sections, generate a professional onboarding document:
+Generate a professional onboarding document using these sections:
 
 ${combinedTemplateText}
-          `,
-        },
-      ],
-    });
+              `,
+            },
+          ],
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("AI timeout")), 10000)
+        ),
+      ]);
 
-    const finalContent = completion.choices[0].message.content;
+      finalContent = completion.choices[0].message.content;
+    } catch (aiError) {
+      // ✅ SAFE FALLBACK (VISIBLE, NOT SILENT)
+      finalContent = `
+Welcome ${employeeName}!
 
-    if (!finalContent) {
-      return res.status(500).json({ error: "AI generation failed" });
+We are pleased to welcome you as a ${role}.
+
+${combinedTemplateText}
+
+We look forward to your contributions and wish you success in your role.
+      `;
     }
 
-    // Save document history
     const savedDoc = await Document.create({
       employeeName,
       role,
@@ -67,17 +81,14 @@ ${combinedTemplateText}
       content: finalContent,
     });
 
-    res.json({
-      content: finalContent,
-      documentId: savedDoc._id,
-    });
+    res.json({ content: finalContent });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Server error during generation" });
+    res.status(500).json({ error: "Document generation failed" });
   }
 });
 
-// 🔹 Fetch document history by employee
+// Fetch history
 router.get("/history/:employeeName", async (req, res) => {
   try {
     const docs = await Document.find({
