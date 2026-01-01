@@ -1,14 +1,13 @@
 const express = require("express");
 const router = express.Router();
+const PDFDocument = require("pdfkit");
 
 const GeneratedDocument = require("../models/GeneratedDocument");
 const { generateOnboardingDocument } = require("../services/openaiService");
 
-// Generate onboarding document
+// Generate document
 router.post("/generate", async (req, res) => {
   try {
-    console.log("Generate route hit");
-
     const { employeeName, role, sections } = req.body;
 
     const content = await generateOnboardingDocument(
@@ -24,39 +23,37 @@ router.post("/generate", async (req, res) => {
     });
 
     res.json(savedDoc);
-  } catch (error) {
-    console.error("Generate error:", error);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Document generation failed" });
   }
 });
 
-// History
-router.get("/history", async (req, res) => {
-  const docs = await GeneratedDocument.find().sort({ createdAt: -1 });
+// Get history by employee
+router.get("/history/:employee", async (req, res) => {
+  const docs = await GeneratedDocument.find({
+    employeeName: req.params.employee,
+  }).sort({ createdAt: -1 });
+
   res.json(docs);
 });
 
-// PDF download
+// Download PDF
 router.get("/download/:id", async (req, res) => {
-  try {
-    const doc = await GeneratedDocument.findById(req.params.id);
-    if (!doc) return res.status(404).json({ error: "Not found" });
+  const docData = await GeneratedDocument.findById(req.params.id);
+  if (!docData) return res.status(404).json({ error: "Not found" });
 
-    const PDFDocument = require("pdfkit");
-    const pdf = new PDFDocument();
+  const pdf = new PDFDocument();
 
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="onboarding.pdf"'
-    );
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="onboarding.pdf"'
+  );
 
-    pdf.pipe(res);
-    pdf.fontSize(12).text(doc.content);
-    pdf.end();
-  } catch (err) {
-    res.status(500).json({ error: "PDF generation failed" });
-  }
+  pdf.pipe(res);
+  pdf.fontSize(12).text(docData.content);
+  pdf.end();
 });
 
 module.exports = router;
