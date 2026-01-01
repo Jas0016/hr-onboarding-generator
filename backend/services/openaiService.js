@@ -24,7 +24,19 @@ Tone: Professional and welcoming.
     input: prompt,
   });
 
-  return response.output_text;
+  // ✅ SAFE extraction (this is the key fix)
+  const output =
+    response.output &&
+    response.output[0] &&
+    response.output[0].content &&
+    response.output[0].content[0] &&
+    response.output[0].content[0].text;
+
+  if (!output) {
+    throw new Error("OpenAI returned empty output");
+  }
+
+  return output;
 }
 
 module.exports = { generateOnboardingDocument };
