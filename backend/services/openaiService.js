@@ -1,6 +1,6 @@
 const OpenAI = require("openai");
 
-const openai = new OpenAI({
+const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
@@ -13,18 +13,18 @@ Create a professional onboarding document.
 Employee Name: ${employeeName}
 Role: ${role}
 
-Include these sections:
+Include the following sections:
 ${sections.join("\n")}
 
 Tone: Professional and welcoming.
 `;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [{ role: "user", content: prompt }],
+  const response = await client.responses.create({
+    model: "gpt-4.1-mini",
+    input: prompt,
   });
 
-  return response.choices[0].message.content;
+  return response.output_text;
 }
 
 module.exports = { generateOnboardingDocument };
