@@ -1,48 +1,47 @@
 import { useState } from "react";
 
-const API_BASE = "https://hr-onboarding-generator-2.onrender.com"; // 🔴 CHANGE if different
+const API = "https://hr-onboarding-generator-2.onrender.com/api/documents";
 
 function App() {
   const [employeeName, setEmployeeName] = useState("");
   const [role, setRole] = useState("");
-  const [elements, setElements] = useState({
-    company_policies: true,
-    employee_benefits: true,
-    team_introduction: true,
-  });
-  const [preview, setPreview] = useState("");
-  const [history, setHistory] = useState([]);
+  const [elements, setElements] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const handleGenerate = async () => {
-    setLoading(true);
-    setPreview("");
-
-    const selectedElements = Object.keys(elements).filter(
-      (key) => elements[key]
+  const toggle = (key) => {
+    setElements((prev) =>
+      prev.includes(key) ? prev.filter((e) => e !== key) : [...prev, key]
     );
+  };
 
-    const res = await fetch(`${API_BASE}/api/documents/generate`, {
+  const generatePDF = async () => {
+    setLoading(true);
+    const res = await fetch(`${API}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         employeeName,
         role,
-        selectedElements,
+        elements,
       }),
     });
 
-    const data = await res.json();
-    setPreview(data.content);
-    setLoading(false);
-  };
+    if (!res.ok) {
+      alert("PDF generation failed");
+      setLoading(false);
+      return;
+    }
 
-  const fetchHistory = async () => {
-    const res = await fetch(
-      `${API_BASE}/api/documents/history/${employeeName}`
-    );
-    const data = await res.json();
-    setHistory(data);
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${employeeName}_Onboarding.pdf`;
+    a.click();
+
+    window.URL.revokeObjectURL(url);
+    setLoading(false);
   };
 
   return (
@@ -67,44 +66,31 @@ function App() {
 
       <h3>Select Onboarding Elements</h3>
 
-      {Object.keys(elements).map((key) => (
-        <label key={key} style={{ display: "block" }}>
-          <input
-            type="checkbox"
-            checked={elements[key]}
-            onChange={() =>
-              setElements({ ...elements, [key]: !elements[key] })
-            }
-          />{" "}
-          {key.replace("_", " ").toUpperCase()}
-        </label>
-      ))}
-
+      <label>
+        <input
+          type="checkbox"
+          onChange={() => toggle("company_policies")}
+        />{" "}
+        Company Policies
+      </label>
       <br />
-      <button onClick={handleGenerate} disabled={loading}>
-        {loading ? "Generating..." : "Generate Document"}
+
+      <label>
+        <input type="checkbox" onChange={() => toggle("benefits")} /> Employee
+        Benefits
+      </label>
+      <br />
+
+      <label>
+        <input type="checkbox" onChange={() => toggle("team_intro")} /> Team
+        Introduction
+      </label>
+      <br />
+      <br />
+
+      <button onClick={generatePDF} disabled={loading}>
+        {loading ? "Generating..." : "Generate & Download PDF"}
       </button>
-
-      <hr />
-
-      {preview && (
-        <>
-          <h2>Preview</h2>
-          <pre style={{ whiteSpace: "pre-wrap" }}>{preview}</pre>
-        </>
-      )}
-
-      <hr />
-
-      <h2>Document History</h2>
-      <button onClick={fetchHistory}>Load History</button>
-
-      {history.map((doc) => (
-        <div key={doc._id} style={{ marginTop: 20 }}>
-          <strong>{new Date(doc.createdAt).toLocaleString()}</strong>
-          <pre style={{ whiteSpace: "pre-wrap" }}>{doc.content}</pre>
-        </div>
-      ))}
     </div>
   );
 }
