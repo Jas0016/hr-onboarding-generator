@@ -1,3 +1,4 @@
+const { generatePDF } = require("../services/pdfService");
 const express = require("express");
 const router = express.Router();
 
@@ -32,3 +33,17 @@ router.get("/history", async (req, res) => {
 });
 
 module.exports = router;
+
+router.get("/download/:id", async (req, res) => {
+  try {
+    const doc = await GeneratedDocument.findById(req.params.id);
+
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    generatePDF(doc.content, res);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
