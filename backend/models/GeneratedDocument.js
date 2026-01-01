@@ -1,16 +1,25 @@
 const mongoose = require("mongoose");
 
-const generatedDocumentSchema = new mongoose.Schema({
-  employeeName: String,
-  role: String,
-  content: String,
-  createdAt: {
-    type: Date,
-    default: Date.now,
+const DocumentSchema = new mongoose.Schema(
+  {
+    employeeName: {
+      type: String,
+      required: true,
+    },
+    role: {
+      type: String,
+      required: true,
+    },
+    selectedElements: {
+      type: [String],
+      required: true,
+    },
+    content: {
+      type: String,
+      required: true,
+    },
   },
-});
-
-module.exports = mongoose.model(
-  "GeneratedDocument",
-  generatedDocumentSchema
+  { timestamps: true }
 );
+
+module.exports = mongoose.model("Document", DocumentSchema);
