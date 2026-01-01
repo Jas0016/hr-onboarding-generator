@@ -1,64 +1,110 @@
-import React, { useState } from "react";
-import axios from "axios";
+import { useState } from "react";
 
-const API = "https://hr-onboarding-generator-2.onrender.com";
+const API_BASE = "https://hr-onboarding-generator-2.onrender.com"; // 🔴 CHANGE if different
 
 function App() {
-  const [name, setName] = useState("");
+  const [employeeName, setEmployeeName] = useState("");
   const [role, setRole] = useState("");
-  const [sections, setSections] = useState([]);
-  const [doc, setDoc] = useState(null);
+  const [elements, setElements] = useState({
+    company_policies: true,
+    employee_benefits: true,
+    team_introduction: true,
+  });
+  const [preview, setPreview] = useState("");
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const toggle = (s) => {
-    setSections((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+  const handleGenerate = async () => {
+    setLoading(true);
+    setPreview("");
+
+    const selectedElements = Object.keys(elements).filter(
+      (key) => elements[key]
     );
+
+    const res = await fetch(`${API_BASE}/api/documents/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        employeeName,
+        role,
+        selectedElements,
+      }),
+    });
+
+    const data = await res.json();
+    setPreview(data.content);
+    setLoading(false);
   };
 
-  const generate = async () => {
-    const res = await axios.post(`${API}/api/documents/generate`, {
-      employeeName: name,
-      role,
-      sections,
-    });
-    setDoc(res.data);
+  const fetchHistory = async () => {
+    const res = await fetch(
+      `${API_BASE}/api/documents/history/${employeeName}`
+    );
+    const data = await res.json();
+    setHistory(data);
   };
 
   return (
     <div style={{ padding: 30 }}>
-      <h2>HR Onboarding Document Generator</h2>
+      <h1>HR Onboarding Document Generator</h1>
 
-      <input placeholder="Employee Name" onChange={e => setName(e.target.value)} />
-      <br /><br />
+      <input
+        placeholder="Employee Name"
+        value={employeeName}
+        onChange={(e) => setEmployeeName(e.target.value)}
+      />
+      <br />
+      <br />
 
-      <input placeholder="Role" onChange={e => setRole(e.target.value)} />
-      <br /><br />
+      <input
+        placeholder="Role"
+        value={role}
+        onChange={(e) => setRole(e.target.value)}
+      />
+      <br />
+      <br />
 
-      <h4>Select Onboarding Elements</h4>
-      <label>
-        <input type="checkbox" onChange={() => toggle("Company Policies")} />
-        Company Policies
-      </label><br />
-      <label>
-        <input type="checkbox" onChange={() => toggle("Employee Benefits")} />
-        Employee Benefits
-      </label><br />
-      <label>
-        <input type="checkbox" onChange={() => toggle("Team Introduction")} />
-        Team Introduction
-      </label><br /><br />
+      <h3>Select Onboarding Elements</h3>
 
-      <button onClick={generate}>Generate</button>
+      {Object.keys(elements).map((key) => (
+        <label key={key} style={{ display: "block" }}>
+          <input
+            type="checkbox"
+            checked={elements[key]}
+            onChange={() =>
+              setElements({ ...elements, [key]: !elements[key] })
+            }
+          />{" "}
+          {key.replace("_", " ").toUpperCase()}
+        </label>
+      ))}
 
-      {doc && (
+      <br />
+      <button onClick={handleGenerate} disabled={loading}>
+        {loading ? "Generating..." : "Generate Document"}
+      </button>
+
+      <hr />
+
+      {preview && (
         <>
-          <h3>Preview</h3>
-          <pre>{doc.content}</pre>
-          <a href={`${API}/api/documents/download/${doc._id}`} target="_blank" rel="noreferrer">
-            Download PDF
-          </a>
+          <h2>Preview</h2>
+          <pre style={{ whiteSpace: "pre-wrap" }}>{preview}</pre>
         </>
       )}
+
+      <hr />
+
+      <h2>Document History</h2>
+      <button onClick={fetchHistory}>Load History</button>
+
+      {history.map((doc) => (
+        <div key={doc._id} style={{ marginTop: 20 }}>
+          <strong>{new Date(doc.createdAt).toLocaleString()}</strong>
+          <pre style={{ whiteSpace: "pre-wrap" }}>{doc.content}</pre>
+        </div>
+      ))}
     </div>
   );
 }
