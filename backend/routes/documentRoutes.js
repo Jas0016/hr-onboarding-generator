@@ -1,59 +1,93 @@
 const express = require("express");
 const router = express.Router();
-const PDFDocument = require("pdfkit");
+const Template = require("../models/Template");
+const Document = require("../models/Document");
+const OpenAI = require("openai");
 
-const GeneratedDocument = require("../models/GeneratedDocument");
-const { generateOnboardingDocument } = require("../services/openaiService");
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-// Generate document
+// 🔹 Generate onboarding document (AI enforced)
 router.post("/generate", async (req, res) => {
   try {
-    const { employeeName, role, sections } = req.body;
+    const { employeeName, role, selectedElements } = req.body;
 
-    const content = await generateOnboardingDocument(
-      employeeName,
-      role,
-      sections
-    );
+    if (!employeeName || !role || !selectedElements?.length) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
 
-    const savedDoc = await GeneratedDocument.create({
-      employeeName,
-      role,
-      content,
+    // Fetch templates from MongoDB
+    const templates = await Template.find({
+      key: { $in: selectedElements },
     });
 
-    res.json(savedDoc);
+    if (!templates.length) {
+      return res.status(400).json({ error: "No templates found" });
+    }
+
+    const combinedTemplateText = templates
+      .map((t) => `### ${t.title}\n${t.content}`)
+      .join("\n\n");
+
+    // 🔥 ENFORCED AI CALL (NO SILENT FALLBACK)
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an HR assistant generating professional onboarding documents.",
+        },
+        {
+          role: "user",
+          content: `
+Employee Name: ${employeeName}
+Role: ${role}
+
+Using the following onboarding sections, generate a professional onboarding document:
+
+${combinedTemplateText}
+          `,
+        },
+      ],
+    });
+
+    const finalContent = completion.choices[0].message.content;
+
+    if (!finalContent) {
+      return res.status(500).json({ error: "AI generation failed" });
+    }
+
+    // Save document history
+    const savedDoc = await Document.create({
+      employeeName,
+      role,
+      selectedElements,
+      content: finalContent,
+    });
+
+    res.json({
+      content: finalContent,
+      documentId: savedDoc._id,
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Document generation failed" });
+    res.status(500).json({ error: "Server error during generation" });
   }
 });
 
-// Get history by employee
-router.get("/history/:employee", async (req, res) => {
-  const docs = await GeneratedDocument.find({
-    employeeName: req.params.employee,
-  }).sort({ createdAt: -1 });
+// 🔹 Fetch document history by employee
+router.get("/history/:employeeName", async (req, res) => {
+  try {
+    const docs = await Document.find({
+      employeeName: req.params.employeeName,
+    }).sort({ createdAt: -1 });
 
-  res.json(docs);
-});
-
-// Download PDF
-router.get("/download/:id", async (req, res) => {
-  const docData = await GeneratedDocument.findById(req.params.id);
-  if (!docData) return res.status(404).json({ error: "Not found" });
-
-  const pdf = new PDFDocument();
-
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader(
-    "Content-Disposition",
-    'attachment; filename="onboarding.pdf"'
-  );
-
-  pdf.pipe(res);
-  pdf.fontSize(12).text(docData.content);
-  pdf.end();
+    res.json(docs);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch history" });
+  }
 });
 
 module.exports = router;
