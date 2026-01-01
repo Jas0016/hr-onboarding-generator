@@ -7,22 +7,37 @@ function App() {
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [doc, setDoc] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const generate = async () => {
-    const res = await axios.post(`${API}/api/documents/generate`, {
-      employeeName: name,
-      role,
-      sections: [
-        "Company policies",
-        "Employee benefits",
-        "Team introduction"
-      ]
-    });
-    setDoc(res.data);
+    try {
+      setLoading(true);
+
+      const res = await axios.post(`${API}/api/documents/generate`, {
+        employeeName: name,
+        role,
+        sections: [
+          "Company policies and professional conduct",
+          "Employee benefits and leave policy",
+          "Team introduction and reporting structure",
+        ],
+      });
+
+      setDoc(res.data);
+    } catch (error) {
+      alert(
+        error.response?.data?.error ||
+          error.message ||
+          "Something went wrong"
+      );
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ padding: 30, fontFamily: "Arial" }}>
       <h2>HR Onboarding Document Generator</h2>
 
       <input
@@ -37,12 +52,14 @@ function App() {
       />
       <br /><br />
 
-      <button onClick={generate}>Generate</button>
+      <button onClick={generate}>
+        {loading ? "Generating..." : "Generate Document"}
+      </button>
 
       {doc && (
         <>
           <h3>Preview</h3>
-          <p>{doc.content}</p>
+          <p style={{ whiteSpace: "pre-line" }}>{doc.content}</p>
           <a
             href={`${API}/api/documents/download/${doc._id}`}
             target="_blank"
