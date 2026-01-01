@@ -1,15 +1,17 @@
-const { generatePDF } = require("../services/pdfService");
 const express = require("express");
 const router = express.Router();
 
 const GeneratedDocument = require("../models/GeneratedDocument");
 const { generateOnboardingDocument } = require("../services/openaiService");
 
+// Generate onboarding document
 router.post("/generate", async (req, res) => {
   try {
+    console.log("Generate route hit");
+
     const { employeeName, role, sections } = req.body;
 
-    const aiContent = await generateOnboardingDocument(
+    const content = await generateOnboardingDocument(
       employeeName,
       role,
       sections
@@ -18,32 +20,43 @@ router.post("/generate", async (req, res) => {
     const savedDoc = await GeneratedDocument.create({
       employeeName,
       role,
-      content: aiContent,
+      content,
     });
 
     res.json(savedDoc);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Generate error:", error);
+    res.status(500).json({ error: "Document generation failed" });
   }
 });
 
+// History
 router.get("/history", async (req, res) => {
   const docs = await GeneratedDocument.find().sort({ createdAt: -1 });
   res.json(docs);
 });
 
-module.exports = router;
-
+// PDF download
 router.get("/download/:id", async (req, res) => {
   try {
     const doc = await GeneratedDocument.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: "Not found" });
 
-    if (!doc) {
-      return res.status(404).json({ error: "Document not found" });
-    }
+    const PDFDocument = require("pdfkit");
+    const pdf = new PDFDocument();
 
-    generatePDF(doc.content, res);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="onboarding.pdf"'
+    );
+
+    pdf.pipe(res);
+    pdf.fontSize(12).text(doc.content);
+    pdf.end();
+  } catch (err) {
+    res.status(500).json({ error: "PDF generation failed" });
   }
 });
+
+module.exports = router;
