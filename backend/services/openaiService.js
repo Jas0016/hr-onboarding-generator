@@ -1,26 +1,37 @@
 const OpenAI = require("openai");
+const Template = require("../models/Template");
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 async function generateOnboardingDocument(employeeName, role, sections) {
+  // 1️⃣ Fetch selected templates from MongoDB
+  const templates = await Template.find({
+    name: { $in: sections },
+  });
+
+  const combinedClauses = templates
+    .map((t) => `- ${t.content}`)
+    .join("\n");
+
+  // 2️⃣ Try OpenAI
   try {
-    const prompt = `
-Create a professional HR onboarding document.
+    const response = await client.responses.create({
+      model: "gpt-4.1-mini",
+      input: `
+You are an HR assistant.
+
+Create a professional onboarding document.
 
 Employee Name: ${employeeName}
 Role: ${role}
 
-Include these sections:
-${sections.join("\n")}
+Use the following clauses:
+${combinedClauses}
 
 Tone: Professional and welcoming.
-`;
-
-    const response = await client.responses.create({
-      model: "gpt-4.1-mini",
-      input: prompt,
+`,
     });
 
     const output =
@@ -30,22 +41,19 @@ Tone: Professional and welcoming.
       response.output[0].content[0] &&
       response.output[0].content[0].text;
 
-    if (!output) throw new Error("Empty AI output");
+    if (!output) throw new Error("Empty AI response");
 
     return output;
-  } catch (error) {
-    console.error("OpenAI failed, using fallback:", error.message);
+  } catch (err) {
+    console.error("OpenAI failed, using fallback");
 
-    // ✅ Guaranteed fallback (demo-safe)
+    // 3️⃣ Fallback (still valid for demo)
     return `
 Welcome ${employeeName}!
 
 We are pleased to welcome you as a ${role}.
 
-This onboarding document covers:
-- Company policies and professional conduct
-- Employee benefits and leave structure
-- Team introduction and reporting hierarchy
+${combinedClauses}
 
 We look forward to your contributions and wish you success in your role.
 `;
