@@ -1,9 +1,9 @@
 const mongoose = require("mongoose");
 
 const TemplateSchema = new mongoose.Schema({
-  key: String,
-  title: String,
-  content: String,
+  key: { type: String, required: true, unique: true },
+  title: { type: String, required: true },
+  content: { type: String, required: true }
 });
 
 module.exports = mongoose.model("Template", TemplateSchema);
