@@ -116,7 +116,7 @@ function App() {
       <br /><br />
 
       <button onClick={generateDocument} disabled={loading}>
-        {loading ? "Generating..." : "Generate & Download PDF"}
+        {loading ? "Generating..." : "Generate"}
       </button>
     </div>
   );
