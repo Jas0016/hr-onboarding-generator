@@ -3,49 +3,65 @@ import { useState } from "react";
 function App() {
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
-  const [elements, setElements] = useState({
-    policies: true,
-    benefits: true,
-    team: true,
-  });
-
+  const [elements, setElements] = useState([]);
   const [preview, setPreview] = useState("");
-  const [showDownload, setShowDownload] = useState(false);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const toggleElement = (key) => {
+    setElements((prev) =>
+      prev.includes(key)
+        ? prev.filter((e) => e !== key)
+        : [...prev, key]
+    );
+  };
+
   const generateDocument = async () => {
+    setError("");
+    setPreview("");
     setLoading(true);
-    setShowDownload(false);
 
     try {
       const res = await fetch(
         "https://hr-onboarding-generator-2.onrender.com/api/documents/generate",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
-            name,
-            role,
-            elements: Object.keys(elements).filter((e) => elements[e]),
+            employeeName: name,
+            role: role,
+            elements: elements,
           }),
         }
       );
 
-      if (!res.ok) throw new Error("Generation failed");
+      if (!res.ok) {
+        throw new Error("Generation failed");
+      }
 
-      const data = await res.json();
-      setPreview(data.content);
-      setShowDownload(true);
+      // PDF download
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${name}_onboarding.pdf`;
+      a.click();
+
+      // Preview text (simple frontend preview)
+      setPreview(
+        `Welcome ${name}!\n\nWe are pleased to welcome you as a ${role}.\n\nWe look forward to your contributions.`
+      );
     } catch (err) {
-      alert("Generation failed");
-      console.error(err);
+      setError("Generation failed");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
-    <div style={{ padding: "30px" }}>
+    <div style={{ padding: "30px", fontFamily: "serif" }}>
       <h1>HR Onboarding Document Generator</h1>
 
       <input
@@ -69,10 +85,7 @@ function App() {
       <label>
         <input
           type="checkbox"
-          checked={elements.policies}
-          onChange={() =>
-            setElements({ ...elements, policies: !elements.policies })
-          }
+          onChange={() => toggleElement("company_policies")}
         />
         Company Policies
       </label>
@@ -81,10 +94,7 @@ function App() {
       <label>
         <input
           type="checkbox"
-          checked={elements.benefits}
-          onChange={() =>
-            setElements({ ...elements, benefits: !elements.benefits })
-          }
+          onChange={() => toggleElement("employee_benefits")}
         />
         Employee Benefits
       </label>
@@ -93,33 +103,24 @@ function App() {
       <label>
         <input
           type="checkbox"
-          checked={elements.team}
-          onChange={() =>
-            setElements({ ...elements, team: !elements.team })
-          }
+          onChange={() => toggleElement("team_introduction")}
         />
         Team Introduction
       </label>
-
       <br />
       <br />
 
       <button onClick={generateDocument} disabled={loading}>
-        {loading ? "Generating..." : "Generate"}
+        {loading ? "Generating..." : "Generate & Download PDF"}
       </button>
+
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
       {preview && (
         <>
           <hr />
           <h2>Preview</h2>
           <pre>{preview}</pre>
-        </>
-      )}
-
-      {showDownload && (
-        <>
-          <br />
-          <button disabled>Download PDF (next step)</button>
         </>
       )}
     </div>
