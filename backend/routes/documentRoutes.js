@@ -1,14 +1,9 @@
 const express = require("express");
 const router = express.Router();
-
 const Template = require("../models/Template");
 const GeneratedDocument = require("../models/GeneratedDocument");
 const PDFDocument = require("pdfkit");
 
-/**
- * POST /api/documents/generate
- * Handles preview OR PDF generation
- */
 router.post("/generate", async (req, res) => {
   try {
     const { employeeName, role, elements, previewOnly } = req.body;
@@ -21,28 +16,27 @@ router.post("/generate", async (req, res) => {
       key: { $in: elements },
     });
 
-    let content = `Welcome ${employeeName}!\n\n`;
-    content += `We are pleased to welcome you as a ${role}.\n\n`;
+    let content = "";
+    content += `Employee Name: ${employeeName}\n`;
+    content += `Role: ${role}\n\n`;
 
     templates.forEach((t) => {
-      content += `${t.name}:\n${t.content}\n\n`;
+      content += `${t.name}:\n`;
+      content += `${t.content}\n\n`;
     });
 
     content += "We look forward to your contributions and wish you success.";
 
-    // SAVE HISTORY
     await GeneratedDocument.create({
       employeeName,
       role,
       content,
     });
 
-    // PREVIEW ONLY
     if (previewOnly) {
       return res.json({ content });
     }
 
-    // PDF GENERATION
     const doc = new PDFDocument({ margin: 50 });
 
     res.setHeader("Content-Type", "application/pdf");
@@ -56,9 +50,14 @@ router.post("/generate", async (req, res) => {
     doc.fontSize(20).text("HR Onboarding Document", { align: "center" });
     doc.moveDown(2);
 
-    doc.fontSize(12).text(`Employee: ${employeeName}`);
+    doc.fonts = {
+      header: 14,
+      body: 11,
+    };
+
+    doc.fontSize(12).text(`Employee Name: ${employeeName}`);
     doc.text(`Role: ${role}`);
-    doc.moveDown(2);
+    doc.moveDown(1.5);
 
     templates.forEach((t) => {
       doc.fontSize(14).text(t.name, { underline: true });
@@ -67,6 +66,10 @@ router.post("/generate", async (req, res) => {
       doc.moveDown(1.5);
     });
 
+    doc.fontSize(11).text(
+      "We look forward to your contributions and wish you success."
+    );
+
     doc.end();
   } catch (err) {
     console.error("BACKEND ERROR:", err);
@@ -74,9 +77,6 @@ router.post("/generate", async (req, res) => {
   }
 });
 
-/**
- * GET /api/documents/history
- */
 router.get("/history", async (req, res) => {
   const history = await GeneratedDocument.find()
     .sort({ createdAt: -1 })
