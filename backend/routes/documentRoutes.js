@@ -5,108 +5,75 @@ const PDFDocument = require("pdfkit");
 const Template = require("../models/Template");
 const GeneratedDocument = require("../models/GeneratedDocument");
 
-/**
- * POST /api/documents/generate
- * Generates preview content and optionally a PDF
- */
-router.post("/generate", async (req, res) => {
+/* ---------------- PREVIEW ---------------- */
+router.post("/preview", async (req, res) => {
   try {
-    const { employeeName, role, elements, download } = req.body;
+    const { employeeName, role, elements } = req.body;
 
-    // ---- VALIDATION ----
-    if (
-      !employeeName ||
-      !role ||
-      !Array.isArray(elements) ||
-      elements.length === 0
-    ) {
+    if (!employeeName || !role || !elements?.length) {
       return res.status(400).json({ error: "Invalid input" });
     }
 
-    // ---- FETCH TEMPLATES ----
-    const templates = await Template.find({
-      key: { $in: elements },
+    const templates = await Template.find({ key: { $in: elements } });
+
+    let content = `Welcome ${employeeName}!\n\n`;
+    content += `We are pleased to welcome you as a ${role}.\n\n`;
+
+    templates.forEach(t => {
+      content += `${t.title}:\n${t.content}\n\n`;
     });
 
-    // ---- BUILD PREVIEW CONTENT ----
-    let preview = `Welcome ${employeeName}!\n\n`;
-    preview += `We are pleased to welcome you as a ${role}.\n\n`;
+    content += "We look forward to your contributions and wish you success.";
 
-    templates.forEach((t) => {
-      preview += `${t.title}:\n`;
-      preview += `${t.content}\n\n`;
-    });
+    res.json({ content });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Preview failed" });
+  }
+});
 
-    preview += `We look forward to your contributions and wish you success.`;
+/* ---------------- DOWNLOAD PDF ---------------- */
+router.post("/download", async (req, res) => {
+  try {
+    const { employeeName, role, elements, content } = req.body;
 
-    // ---- SAVE HISTORY ----
+    if (!employeeName || !role || !elements?.length || !content) {
+      return res.status(400).json({ error: "Invalid input" });
+    }
+
     await GeneratedDocument.create({
       employeeName,
       role,
-      elements,
-      content: preview,
-      createdAt: new Date(),
+      selectedElements: elements,
+      content
     });
 
-    // ---- PREVIEW ONLY ----
-    if (!download) {
-      return res.json({ preview });
-    }
-
-    // ---- PDF GENERATION ----
     const doc = new PDFDocument({ margin: 50 });
+
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      "attachment; filename=onboarding.pdf"
+      `attachment; filename=${employeeName}_onboarding.pdf`
     );
 
     doc.pipe(res);
 
-    // Title
     doc.fontSize(18).text("HR Onboarding Document", { align: "center" });
     doc.moveDown(2);
 
-    // Welcome
-    doc.fontSize(12).text(`Welcome ${employeeName}!`);
-    doc.moveDown(0.5);
-    doc.text(`We are pleased to welcome you as a ${role}.`);
-    doc.moveDown(1.5);
-
-    // Sections
-    templates.forEach((t) => {
-      doc.fontSize(13).text(t.title, { underline: true });
-      doc.moveDown(0.5);
-      doc.fontSize(11).text(t.content);
-      doc.moveDown(1.2);
-    });
-
-    // Footer
-    doc.fontSize(11).text(
-      "We look forward to your contributions and wish you success."
-    );
+    doc.fontSize(12).text(content);
 
     doc.end();
   } catch (err) {
-    console.error("BACKEND ERROR:", err);
-    res.status(500).json({ error: "Generation failed" });
+    console.error(err);
+    res.status(500).json({ error: "PDF generation failed" });
   }
 });
 
-/**
- * GET /api/documents/history
- * Fetch generation history
- */
+/* ---------------- HISTORY ---------------- */
 router.get("/history", async (req, res) => {
-  try {
-    const docs = await GeneratedDocument.find()
-      .sort({ createdAt: -1 })
-      .limit(50);
-
-    res.json(docs);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch history" });
-  }
+  const docs = await GeneratedDocument.find().sort({ createdAt: -1 });
+  res.json(docs);
 });
 
 module.exports = router;
