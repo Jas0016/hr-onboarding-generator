@@ -5,6 +5,7 @@ const API = "https://hr-onboarding-generator-2.onrender.com/api/documents";
 function App() {
   const [employeeName, setEmployeeName] = useState("");
   const [role, setRole] = useState("");
+
   const [elements, setElements] = useState({
     company_policies: true,
     employee_benefits: true,
@@ -14,16 +15,21 @@ function App() {
   const [preview, setPreview] = useState("");
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const selectedElements = Object.keys(elements).filter(
     (key) => elements[key]
   );
 
+  // -------- PREVIEW --------
   const generatePreview = async () => {
     if (!employeeName || !role || selectedElements.length === 0) {
       alert("Please fill all fields");
       return;
     }
+
+    setLoading(true);
+    setPreview("");
 
     const res = await fetch(`${API}/preview`, {
       method: "POST",
@@ -37,8 +43,10 @@ function App() {
 
     const data = await res.json();
     setPreview(data.content);
+    setLoading(false);
   };
 
+  // -------- DOWNLOAD PDF --------
   const downloadPDF = async () => {
     const res = await fetch(`${API}/download`, {
       method: "POST",
@@ -59,6 +67,7 @@ function App() {
     a.click();
   };
 
+  // -------- HISTORY TOGGLE --------
   const toggleHistory = async () => {
     if (showHistory) {
       setShowHistory(false);
@@ -72,7 +81,7 @@ function App() {
   };
 
   return (
-    <div style={{ padding: "30px", fontFamily: "Arial" }}>
+    <div style={{ padding: "30px", fontFamily: "Arial, sans-serif" }}>
       <h1>HR Onboarding Document Generator</h1>
 
       <input
@@ -136,6 +145,8 @@ function App() {
 
       <br /><br />
       <button onClick={generatePreview}>Generate Preview</button>
+
+      {loading && <p>Generating preview...</p>}
 
       {preview && (
         <>
