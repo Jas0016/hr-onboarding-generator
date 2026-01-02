@@ -3,71 +3,52 @@ import { useState } from "react";
 function App() {
   const [employeeName, setEmployeeName] = useState("");
   const [role, setRole] = useState("");
-  const [elements, setElements] = useState({
-    policies: true,
-    benefits: true,
-    team: true,
-  });
+  const [elements, setElements] = useState([]);
   const [preview, setPreview] = useState("");
-  const [error, setError] = useState("");
+
+  const toggleElement = (el) => {
+    setElements(prev =>
+      prev.includes(el)
+        ? prev.filter(e => e !== el)
+        : [...prev, el]
+    );
+  };
 
   const generatePreview = async () => {
-    setError("");
-    setPreview("");
-
-    const selectedElements = [];
-    if (elements.policies) selectedElements.push("Company Policies");
-    if (elements.benefits) selectedElements.push("Employee Benefits");
-    if (elements.team) selectedElements.push("Team Introduction");
-
-    if (!employeeName || !role || selectedElements.length === 0) {
-      setError("Please fill all fields and select at least one option.");
+    if (!employeeName || !role || elements.length === 0) {
+      alert("Fill all fields");
       return;
     }
 
-    try {
-      const res = await fetch(
-        "https://hr-onboarding-generator-2.onrender.com/api/documents/generate",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            employeeName,
-            role,
-            elements: selectedElements,
-          }),
-        }
-      );
+    setPreview(`
+Welcome ${employeeName}!
 
-      if (!res.ok) {
-        throw new Error("Generation failed");
-      }
+We are pleased to welcome you as a ${role}.
 
-      const data = await res.json();
-      setPreview(data.previewText);
-    } catch (err) {
-      setError("Generation failed. Check backend.");
-    }
+${elements.join("\n")}
+
+We look forward to your contributions.
+    `);
   };
 
   const downloadPDF = async () => {
-    const selectedElements = [];
-    if (elements.policies) selectedElements.push("Company Policies");
-    if (elements.benefits) selectedElements.push("Employee Benefits");
-    if (elements.team) selectedElements.push("Team Introduction");
-
     const res = await fetch(
-      "https://hr-onboarding-generator-2.onrender.com/api/documents/download",
+      "https://hr-onboarding-generator-2.onrender.com/api/documents/generate",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           employeeName,
           role,
-          elements: selectedElements,
-        }),
+          elements
+        })
       }
     );
+
+    if (!res.ok) {
+      alert("Generation failed");
+      return;
+    }
 
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
@@ -75,72 +56,45 @@ function App() {
     a.href = url;
     a.download = "onboarding.pdf";
     a.click();
-    window.URL.revokeObjectURL(url);
   };
 
   return (
-    <div style={{ padding: "30px" }}>
+    <div style={{ padding: 30 }}>
       <h1>HR Onboarding Document Generator</h1>
 
       <input
         placeholder="Employee Name"
         value={employeeName}
-        onChange={(e) => setEmployeeName(e.target.value)}
+        onChange={e => setEmployeeName(e.target.value)}
       />
       <br /><br />
 
       <input
         placeholder="Role"
         value={role}
-        onChange={(e) => setRole(e.target.value)}
+        onChange={e => setRole(e.target.value)}
       />
       <br /><br />
 
       <h3>Select Onboarding Elements</h3>
-
       <label>
-        <input
-          type="checkbox"
-          checked={elements.policies}
-          onChange={() =>
-            setElements({ ...elements, policies: !elements.policies })
-          }
-        />
+        <input type="checkbox" onChange={() => toggleElement("Company Policies")} />
         Company Policies
-      </label>
-      <br />
-
+      </label><br />
       <label>
-        <input
-          type="checkbox"
-          checked={elements.benefits}
-          onChange={() =>
-            setElements({ ...elements, benefits: !elements.benefits })
-          }
-        />
+        <input type="checkbox" onChange={() => toggleElement("Employee Benefits")} />
         Employee Benefits
-      </label>
-      <br />
-
+      </label><br />
       <label>
-        <input
-          type="checkbox"
-          checked={elements.team}
-          onChange={() =>
-            setElements({ ...elements, team: !elements.team })
-          }
-        />
+        <input type="checkbox" onChange={() => toggleElement("Team Introduction")} />
         Team Introduction
-      </label>
-      <br /><br />
+      </label><br /><br />
 
       <button onClick={generatePreview}>Generate Preview</button>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
       {preview && (
         <>
-          <h2>Preview</h2>
+          <h3>Preview</h3>
           <pre>{preview}</pre>
           <button onClick={downloadPDF}>Download PDF</button>
         </>
