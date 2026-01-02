@@ -1,28 +1,30 @@
 const express = require("express");
 const router = express.Router();
+
 const Template = require("../models/Template");
 const GeneratedDocument = require("../models/GeneratedDocument");
 
+/**
+ * POST /api/documents/generate
+ * Generates onboarding document preview + saves history
+ */
 router.post("/generate", async (req, res) => {
   try {
     const { name, role, elements } = req.body;
 
+    // 🔒 Validation
     if (!name || !role || !elements || elements.length === 0) {
       return res.status(400).json({
-        error: "Name, role, and onboarding elements are required"
+        error: "Name, role, and onboarding elements are required",
       });
     }
 
-    // Fetch templates from DB
+    // Fetch templates
     const templates = await Template.find({
-      key: { $in: elements }
+      key: { $in: elements },
     });
 
-    if (!templates.length) {
-      return res.status(400).json({ error: "No templates found" });
-    }
-
-    // Build document text
+    // Build content
     let content = `Welcome ${name}!\n\n`;
     content += `We are pleased to welcome you as a ${role}.\n\n`;
 
@@ -32,19 +34,20 @@ router.post("/generate", async (req, res) => {
 
     content += "We look forward to your contributions.";
 
-    // Save history
+    // ✅ SAVE WITH CORRECT FIELD NAME
     await GeneratedDocument.create({
-      employeeName: name,
+      employeeName: name, // IMPORTANT
       role,
       elements,
-      content
+      content,
+      createdAt: new Date(),
     });
 
-    return res.json({ content });
-
+    // ✅ RETURN PREVIEW ONLY
+    res.json({ content });
   } catch (err) {
     console.error("BACKEND ERROR:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
