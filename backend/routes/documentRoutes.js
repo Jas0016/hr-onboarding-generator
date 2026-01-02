@@ -34,7 +34,7 @@ router.post("/generate", async (req, res) => {
 
     // Save history
     await GeneratedDocument.create({
-      name,
+      employeeName: name,
       role,
       elements,
       content
