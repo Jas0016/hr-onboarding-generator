@@ -3,55 +3,49 @@ import { useState } from "react";
 function App() {
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
-  const [elements, setElements] = useState([]);
+  const [elements, setElements] = useState({
+    policies: true,
+    benefits: true,
+    team: true,
+  });
+
   const [preview, setPreview] = useState("");
+  const [showDownload, setShowDownload] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const toggleElement = (key) => {
-    setElements((prev) =>
-      prev.includes(key)
-        ? prev.filter((e) => e !== key)
-        : [...prev, key]
-    );
-  };
-
   const generateDocument = async () => {
-    try {
-      setLoading(true);
-      setPreview("");
+    setLoading(true);
+    setShowDownload(false);
 
-      const response = await fetch(
+    try {
+      const res = await fetch(
         "https://hr-onboarding-generator-2.onrender.com/api/documents/generate",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name,
             role,
-            elements
-          })
+            elements: Object.keys(elements).filter((e) => elements[e]),
+          }),
         }
       );
 
-      if (!response.ok) {
-        const err = await response.json();
-        console.error("Backend error:", err);
-        throw new Error("Generation failed");
-      }
+      if (!res.ok) throw new Error("Generation failed");
 
-      const data = await response.json();
+      const data = await res.json();
       setPreview(data.content);
+      setShowDownload(true);
     } catch (err) {
-      alert("Generation failed. Check inputs.");
-    } finally {
-      setLoading(false);
+      alert("Generation failed");
+      console.error(err);
     }
+
+    setLoading(false);
   };
 
   return (
-    <div style={{ padding: "40px" }}>
+    <div style={{ padding: "30px" }}>
       <h1>HR Onboarding Document Generator</h1>
 
       <input
@@ -59,21 +53,26 @@ function App() {
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
-      <br /><br />
+      <br />
+      <br />
 
       <input
         placeholder="Role"
         value={role}
         onChange={(e) => setRole(e.target.value)}
       />
-      <br /><br />
+      <br />
+      <br />
 
       <h3>Select Onboarding Elements</h3>
 
       <label>
         <input
           type="checkbox"
-          onChange={() => toggleElement("company_policies")}
+          checked={elements.policies}
+          onChange={() =>
+            setElements({ ...elements, policies: !elements.policies })
+          }
         />
         Company Policies
       </label>
@@ -82,7 +81,10 @@ function App() {
       <label>
         <input
           type="checkbox"
-          onChange={() => toggleElement("employee_benefits")}
+          checked={elements.benefits}
+          onChange={() =>
+            setElements({ ...elements, benefits: !elements.benefits })
+          }
         />
         Employee Benefits
       </label>
@@ -91,12 +93,16 @@ function App() {
       <label>
         <input
           type="checkbox"
-          onChange={() => toggleElement("team_introduction")}
+          checked={elements.team}
+          onChange={() =>
+            setElements({ ...elements, team: !elements.team })
+          }
         />
         Team Introduction
       </label>
 
-      <br /><br />
+      <br />
+      <br />
 
       <button onClick={generateDocument} disabled={loading}>
         {loading ? "Generating..." : "Generate"}
@@ -107,6 +113,13 @@ function App() {
           <hr />
           <h2>Preview</h2>
           <pre>{preview}</pre>
+        </>
+      )}
+
+      {showDownload && (
+        <>
+          <br />
+          <button disabled>Download PDF (next step)</button>
         </>
       )}
     </div>
