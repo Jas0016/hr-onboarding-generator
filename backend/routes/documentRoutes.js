@@ -1,61 +1,84 @@
 const express = require("express");
-const PDFDocument = require("pdfkit");
+const router = express.Router();
+
 const Template = require("../models/Template");
 const GeneratedDocument = require("../models/GeneratedDocument");
 
-const router = express.Router();
-
+/**
+ * POST /api/documents/generate
+ * PURPOSE:
+ * - Generate onboarding document text
+ * - RETURN JSON for PREVIEW
+ * - SAVE history in MongoDB
+ * - NO PDF here
+ */
 router.post("/generate", async (req, res) => {
   try {
-    const { employeeName, role, elements } = req.body;
+    const { name, role, elements } = req.body;
 
-    if (!employeeName || !role || !elements || elements.length === 0) {
-      return res.status(400).json({ error: "Missing required fields" });
+    // Validation
+    if (!name || !role || !elements || elements.length === 0) {
+      return res.status(400).json({
+        error: "Name, role, and onboarding elements are required"
+      });
     }
 
+    // Fetch selected templates
     const templates = await Template.find({
-      key: { $in: elements },
+      key: { $in: elements }
     });
 
-    const doc = new PDFDocument({ margin: 50 });
+    if (templates.length === 0) {
+      return res.status(400).json({
+        error: "No templates found for selected elements"
+      });
+    }
 
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="onboarding-${employeeName}.pdf"`
-    );
+    // Build document content
+    let content = `Welcome ${name}!\n\n`;
+    content += `We are pleased to welcome you as a ${role}.\n\n`;
 
-    doc.pipe(res);
-
-    doc.fontSize(20).text("HR Onboarding Document", { align: "center" });
-    doc.moveDown();
-
-    doc.fontSize(14).text(`Welcome ${employeeName}!`);
-    doc.text(`Role: ${role}`);
-    doc.moveDown();
-
-    templates.forEach((tpl) => {
-      doc.fontSize(16).text(tpl.title, { underline: true });
-      doc.moveDown(0.5);
-      doc.fontSize(12).text(tpl.content);
-      doc.moveDown();
+    templates.forEach(template => {
+      content += `${template.title}: ${template.content}\n\n`;
     });
 
-    doc.text(
-      "We look forward to your contributions and wish you success in your role."
-    );
+    content += "We look forward to your contributions and wish you success in your role.";
 
-    doc.end();
-
+    // Save document history
     await GeneratedDocument.create({
-      employeeName,
+      name,
       role,
-      content: templates.map(t => `${t.title}: ${t.content}`).join("\n\n"),
+      content,
+      createdAt: new Date()
     });
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to generate document" });
+    // RETURN JSON FOR PREVIEW
+    return res.status(200).json({
+      content
+    });
+
+  } catch (error) {
+    console.error("Generate error:", error);
+    return res.status(500).json({
+      error: "Internal server error"
+    });
+  }
+});
+
+/**
+ * GET /api/documents/history
+ * PURPOSE:
+ * - Fetch document generation history
+ */
+router.get("/history", async (req, res) => {
+  try {
+    const history = await GeneratedDocument.find()
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to load history" });
   }
 });
 
