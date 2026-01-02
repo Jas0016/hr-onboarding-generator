@@ -1,57 +1,113 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-const BACKEND = "https://hr-onboarding-generator-2.onrender.com";
+const API = "https://hr-onboarding-generator-2.onrender.com/api/documents";
 
 function App() {
   const [employeeName, setEmployeeName] = useState("");
   const [role, setRole] = useState("");
-  const [elements, setElements] = useState([]);
+  const [elements, setElements] = useState({
+    policies: true,
+    benefits: true,
+    team: true
+  });
   const [preview, setPreview] = useState("");
-  const [docId, setDocId] = useState("");
+  const [docId, setDocId] = useState(null);
+  const [history, setHistory] = useState([]);
 
-  const toggle = (key) => {
-    setElements((prev) =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
-  };
+  const selectedElements = Object.keys(elements).filter(k => elements[k]);
 
   const generatePreview = async () => {
-    const res = await fetch(`${BACKEND}/api/documents/preview`, {
+    const res = await fetch(`${API}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeName, role, elements }),
+      body: JSON.stringify({
+        employeeName,
+        role,
+        selectedElements
+      })
     });
+
     const data = await res.json();
     setPreview(data.content);
     setDocId(data.documentId);
   };
 
+  const loadHistory = async () => {
+    const res = await fetch(`${API}/history`);
+    const data = await res.json();
+    setHistory(data);
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
   return (
     <div style={{ padding: 30 }}>
       <h1>HR Onboarding Document Generator</h1>
 
-      <input placeholder="Employee Name" onChange={e => setEmployeeName(e.target.value)} />
+      <input
+        placeholder="Employee Name"
+        value={employeeName}
+        onChange={e => setEmployeeName(e.target.value)}
+      />
       <br /><br />
-      <input placeholder="Role" onChange={e => setRole(e.target.value)} />
-      <br /><br />
+      <input
+        placeholder="Role"
+        value={role}
+        onChange={e => setRole(e.target.value)}
+      />
 
       <h3>Select Onboarding Elements</h3>
-      <label><input type="checkbox" onChange={() => toggle("company_policies")} /> Company Policies</label><br />
-      <label><input type="checkbox" onChange={() => toggle("employee_benefits")} /> Employee Benefits</label><br />
-      <label><input type="checkbox" onChange={() => toggle("team_introduction")} /> Team Introduction</label><br /><br />
+      {Object.keys(elements).map(k => (
+        <label key={k}>
+          <input
+            type="checkbox"
+            checked={elements[k]}
+            onChange={() =>
+              setElements({ ...elements, [k]: !elements[k] })
+            }
+          />{" "}
+          {k}
+          <br />
+        </label>
+      ))}
 
+      <br />
       <button onClick={generatePreview}>Generate Preview</button>
 
       {preview && (
         <>
           <hr />
-          <h2>Preview</h2>
+          <h3>Preview</h3>
           <pre>{preview}</pre>
-          <a href={`${BACKEND}/api/documents/${docId}/pdf`}>
-            <button>Download PDF</button>
-          </a>
+          <button
+            onClick={() =>
+              window.open(`${API}/download/${docId}`, "_blank")
+            }
+          >
+            Download PDF
+          </button>
         </>
       )}
+
+      <hr />
+      <h3>Document History</h3>
+      {history.map(h => (
+        <div key={h._id} style={{ marginBottom: 20 }}>
+          <strong>{h.employeeName}</strong> — {h.role}
+          <br />
+          {new Date(h.createdAt).toLocaleString()}
+          <br />
+          <button
+            onClick={() =>
+              window.open(`${API}/download/${h._id}`, "_blank")
+            }
+          >
+            Download PDF
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
