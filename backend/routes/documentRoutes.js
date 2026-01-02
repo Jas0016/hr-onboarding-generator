@@ -1,91 +1,83 @@
 const express = require("express");
-const router = express.Router();
 const PDFDocument = require("pdfkit");
-
 const Template = require("../models/Template");
 const GeneratedDocument = require("../models/GeneratedDocument");
 
-// ===============================
-// POST: Generate onboarding doc
-// ===============================
-router.post("/generate", async (req, res) => {
+const router = express.Router();
+
+/**
+ * POST /api/documents/preview
+ * Returns preview text + saves history
+ */
+router.post("/preview", async (req, res) => {
   try {
     const { employeeName, role, elements } = req.body;
 
-    // 1. Validate input
-    if (
-      !employeeName ||
-      !role ||
-      !Array.isArray(elements) ||
-      elements.length === 0
-    ) {
-      return res.status(400).json({
-        error: "Name, role, and onboarding elements are required",
-      });
+    if (!employeeName || !role || !Array.isArray(elements) || !elements.length) {
+      return res.status(400).json({ error: "Invalid input" });
     }
 
-    // 2. Fetch templates from MongoDB
-    const templates = await Template.find({
-      key: { $in: elements },
-    });
-
-    if (templates.length === 0) {
-      return res.status(400).json({
-        error: "No matching templates found",
-      });
+    const templates = await Template.find({ key: { $in: elements } });
+    if (!templates.length) {
+      return res.status(400).json({ error: "No templates found" });
     }
 
-    // 3. Build document text
-    let documentText = `Welcome ${employeeName}!\n\n`;
-    documentText += `We are pleased to welcome you as a ${role}.\n\n`;
+    let content = `Welcome ${employeeName}!\n\n`;
+    content += `We are pleased to welcome you as a ${role}.\n\n`;
 
-    templates.forEach((t) => {
-      documentText += `${t.title}:\n`;
-      documentText += `${t.content}\n\n`;
+    templates.forEach(t => {
+      content += `${t.title}:\n${t.content}\n\n`;
     });
 
-    documentText +=
-      "We look forward to your contributions and wish you success in your role.";
+    content += "We look forward to your contributions and wish you success.";
 
-    // 4. Save history in MongoDB
-    const savedDoc = await GeneratedDocument.create({
+    const saved = await GeneratedDocument.create({
       employeeName,
       role,
       elements,
-      content: documentText,
-      createdAt: new Date(),
+      content,
     });
 
-    // 5. Create PDF
+    res.json({ documentId: saved._id, content });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Preview generation failed" });
+  }
+});
+
+/**
+ * GET /api/documents/:id/pdf
+ * Streams PDF for download
+ */
+router.get("/:id/pdf", async (req, res) => {
+  try {
+    const docData = await GeneratedDocument.findById(req.params.id);
+    if (!docData) return res.status(404).send("Not found");
+
     const pdf = new PDFDocument({ margin: 50 });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=${employeeName}_onboarding.pdf`
+      `attachment; filename="onboarding-${docData.employeeName}.pdf"`
     );
 
     pdf.pipe(res);
     pdf.fontSize(18).text("HR Onboarding Document", { align: "center" });
     pdf.moveDown();
-
-    pdf.fontSize(12).text(documentText);
+    pdf.fontSize(12).text(docData.content);
     pdf.end();
   } catch (err) {
-    console.error("BACKEND ERROR:", err);
-    res.status(500).json({ error: "Document generation failed" });
+    console.error(err);
+    res.status(500).send("PDF generation failed");
   }
 });
 
-// ===============================
-// GET: Document history
-// ===============================
+/**
+ * GET /api/documents/history
+ */
 router.get("/history", async (req, res) => {
-  try {
-    const docs = await GeneratedDocument.find().sort({ createdAt: -1 });
-    res.json(docs);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to load history" });
-  }
+  const history = await GeneratedDocument.find().sort({ createdAt: -1 });
+  res.json(history);
 });
 
 module.exports = router;
