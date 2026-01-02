@@ -1,49 +1,45 @@
-import React, { useState } from "react";
+import { useState } from "react";
 
-const API_URL = "https://hr-onboarding-generator-2.onrender.com";
+const API = "https://hr-onboarding-generator-2.onrender.com/api/documents";
 
 function App() {
   const [employeeName, setEmployeeName] = useState("");
   const [role, setRole] = useState("");
-  const [elements, setElements] = useState({
-    policies: true,
-    benefits: true,
-    team: true,
-  });
+  const [elements, setElements] = useState([
+    "company_policies",
+    "employee_benefits",
+    "team_introduction",
+  ]);
 
   const [preview, setPreview] = useState("");
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const generatePreview = async () => {
-    setLoading(true);
-    setPreview("");
-
-    const res = await fetch(`${API_URL}/api/documents/generate`, {
+    const res = await fetch(`${API}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         employeeName,
         role,
-        elements: Object.keys(elements).filter((k) => elements[k]),
+        elements,
         previewOnly: true,
       }),
     });
 
     const data = await res.json();
-    setPreview(data.content || "");
-    setLoading(false);
+    setPreview(data.content);
   };
 
   const downloadPDF = async () => {
-    const res = await fetch(`${API_URL}/api/documents/generate`, {
+    const res = await fetch(`${API}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         employeeName,
         role,
-        elements: Object.keys(elements).filter((k) => elements[k]),
+        elements,
+        previewOnly: false,
       }),
     });
 
@@ -55,15 +51,20 @@ function App() {
     a.click();
   };
 
-  const loadHistory = async () => {
-    const res = await fetch(`${API_URL}/api/documents/history`);
+  const toggleHistory = async () => {
+    if (showHistory) {
+      setShowHistory(false);
+      return;
+    }
+
+    const res = await fetch(`${API}/history`);
     const data = await res.json();
     setHistory(data);
     setShowHistory(true);
   };
 
   return (
-    <div style={{ padding: "40px", fontFamily: "serif" }}>
+    <div style={{ padding: "30px" }}>
       <h1>HR Onboarding Document Generator</h1>
 
       <input
@@ -71,7 +72,8 @@ function App() {
         value={employeeName}
         onChange={(e) => setEmployeeName(e.target.value)}
       />
-      <br /><br />
+      <br />
+      <br />
 
       <input
         placeholder="Role"
@@ -80,25 +82,21 @@ function App() {
       />
 
       <h3>Select Onboarding Elements</h3>
-      {Object.keys(elements).map((key) => (
-        <label key={key} style={{ display: "block" }}>
-          <input
-            type="checkbox"
-            checked={elements[key]}
-            onChange={() =>
-              setElements({ ...elements, [key]: !elements[key] })
-            }
-          />
-          {key === "policies" && " Company Policies"}
-          {key === "benefits" && " Employee Benefits"}
-          {key === "team" && " Team Introduction"}
-        </label>
-      ))}
+      <label>
+        <input type="checkbox" checked readOnly /> Company Policies
+      </label>
+      <br />
+      <label>
+        <input type="checkbox" checked readOnly /> Employee Benefits
+      </label>
+      <br />
+      <label>
+        <input type="checkbox" checked readOnly /> Team Introduction
+      </label>
 
       <br />
+      <br />
       <button onClick={generatePreview}>Generate Preview</button>
-
-      {loading && <p>Generating preview…</p>}
 
       {preview && (
         <>
@@ -110,13 +108,13 @@ function App() {
       )}
 
       <hr />
-      <button onClick={loadHistory}>
-        View Generated Documents by Employee
+      <button onClick={toggleHistory}>
+        View History (by Employee)
       </button>
 
       {showHistory && (
         <>
-          <h2>Generated Documents by Employee</h2>
+          <h2>Generated Documents History</h2>
           <ul>
             {history.map((h) => (
               <li key={h._id}>
