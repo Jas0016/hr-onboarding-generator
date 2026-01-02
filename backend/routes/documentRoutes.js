@@ -1,30 +1,27 @@
 const express = require("express");
 const router = express.Router();
+const PDFDocument = require("pdfkit");
 
 const Template = require("../models/Template");
 const GeneratedDocument = require("../models/GeneratedDocument");
 
 /**
- * POST /api/documents/generate
- * Generates onboarding document preview + saves history
+ * PREVIEW GENERATION
  */
 router.post("/generate", async (req, res) => {
   try {
     const { name, role, elements } = req.body;
 
-    // 🔒 Validation
     if (!name || !role || !elements || elements.length === 0) {
       return res.status(400).json({
         error: "Name, role, and onboarding elements are required",
       });
     }
 
-    // Fetch templates
     const templates = await Template.find({
       key: { $in: elements },
     });
 
-    // Build content
     let content = `Welcome ${name}!\n\n`;
     content += `We are pleased to welcome you as a ${role}.\n\n`;
 
@@ -34,20 +31,45 @@ router.post("/generate", async (req, res) => {
 
     content += "We look forward to your contributions.";
 
-    // ✅ SAVE WITH CORRECT FIELD NAME
     await GeneratedDocument.create({
-      employeeName: name, // IMPORTANT
+      employeeName: name,
       role,
       elements,
       content,
       createdAt: new Date(),
     });
 
-    // ✅ RETURN PREVIEW ONLY
     res.json({ content });
   } catch (err) {
-    console.error("BACKEND ERROR:", err);
+    console.error(err);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
+ * PDF DOWNLOAD
+ */
+router.post("/download", (req, res) => {
+  try {
+    const { content } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ error: "Content required" });
+    }
+
+    const doc = new PDFDocument();
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="onboarding.pdf"'
+    );
+
+    doc.pipe(res);
+    doc.fontSize(12).text(content);
+    doc.end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "PDF generation failed" });
   }
 });
 
