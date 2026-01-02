@@ -21,7 +21,7 @@ router.post("/generate", async (req, res) => {
     content += `Role: ${role}\n\n`;
 
     templates.forEach((t) => {
-      content += `${t.name}:\n`;
+      content += `${t.title}:\n`;
       content += `${t.content}\n\n`;
     });
 
@@ -60,7 +60,7 @@ router.post("/generate", async (req, res) => {
     doc.moveDown(1.5);
 
     templates.forEach((t) => {
-      doc.fontSize(14).text(t.name, { underline: true });
+      doc.fontSize(14).text(t.title, { underline: true });
       doc.moveDown(0.5);
       doc.fontSize(11).text(t.content);
       doc.moveDown(1.5);
